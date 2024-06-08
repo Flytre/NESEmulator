@@ -1,3 +1,6 @@
+//
+// Created by Aaron Rahman on 6/7/24.
+//
 #include "array"
 
 using namespace std;
@@ -24,8 +27,8 @@ class Cpu6502_State {
         uint8_t P;
     public:
         Reg() {
-           P = 1 << 5;
-           S = 0xff;
+            P = 1 << 5;
+            S = 0xff;
         }
 
         [[nodiscard]] bool flag_set(FlagPositions flag) const {
@@ -63,13 +66,18 @@ class Cpu6502_State {
             Y = y;
         }
 
-        [[nodiscard]] uint16_t getPc() const {
+        [[nodiscard]] uint16_t getPC() const {
             return PC;
         }
 
-        void setPc(uint16_t pc) {
+        void setPC(uint16_t pc) {
             PC = pc;
         }
+
+        void incrPC() {
+            PC++;
+        }
+
 
         [[nodiscard]] uint8_t getS() const {
             return S;
@@ -92,11 +100,11 @@ public:
     cpu_mem mem;
     Reg reg;
 
-    const cpu_mem &getMem() const {
+    const cpu_mem &getMem() {
         return mem;
     }
 
-    const Reg &getReg() const {
+    Reg &getReg() {
         return reg;
     }
 
