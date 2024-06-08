@@ -1,23 +1,107 @@
 #include "array"
 
-using reg1b = unsigned char;
-using reg2b = unsigned short;
-using mem_entry = unsigned char;
 using namespace std;
+using cpu_mem = array<uint8_t, 1 << 16>;
 
+enum class FlagPositions {
+    CARRY = 0,
+    ZERO = 1,
+    INTERRUPT_DISABLE = 2,
+    DECIMAL = 3,
+    B = 4,
+    OVF = 6,
+    NEG = 7
+};
 
-class Cpu6502 {
+class Cpu6502_State {
     class Reg {
+    private:
+        uint8_t A;
+        uint8_t X;
+        uint8_t Y;
+        uint16_t PC;
+        uint8_t S;
+        uint8_t P;
     public:
-        reg1b A;
-        reg1b X;
-        reg1b Y;
-        reg2b PC;
-        reg1b S;
-        reg1b P;
+        Reg() {
+           P = 1 << 5;
+           S = 0xff;
+        }
+
+        [[nodiscard]] bool flag_set(FlagPositions flag) const {
+            return (P >> static_cast<int>(flag)) & 1;
+        }
+
+        void set_flag(FlagPositions flag, bool value) {
+            if (value)
+                P |= 1 << static_cast<int>(flag);
+            else
+                P &= ~(1 << static_cast<int>(flag));
+        }
+
+        [[nodiscard]] uint8_t getA() const {
+            return A;
+        }
+
+        void setA(uint8_t a) {
+            A = a;
+        }
+
+        [[nodiscard]] uint8_t getX() const {
+            return X;
+        }
+
+        void setX(uint8_t x) {
+            X = x;
+        }
+
+        [[nodiscard]] uint8_t getY() const {
+            return Y;
+        }
+
+        void setY(uint8_t y) {
+            Y = y;
+        }
+
+        [[nodiscard]] uint16_t getPc() const {
+            return PC;
+        }
+
+        void setPc(uint16_t pc) {
+            PC = pc;
+        }
+
+        [[nodiscard]] uint8_t getS() const {
+            return S;
+        }
+
+        void setS(uint8_t s) {
+            S = s;
+        }
+
+        [[nodiscard]] uint8_t getP() const {
+            return P;
+        }
+
+        void setP(uint8_t p) {
+            P = p;
+        }
     };
 
 public:
-    array<int, 1> mem;
+    cpu_mem mem;
     Reg reg;
+
+    const cpu_mem &getMem() const {
+        return mem;
+    }
+
+    const Reg &getReg() const {
+        return reg;
+    }
+
+    Cpu6502_State() {
+        mem = cpu_mem();
+        reg = Reg();
+    }
 };
