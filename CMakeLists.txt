@@ -3,4 +3,4 @@ project(NESEmulator)
 
 set(CMAKE_CXX_STANDARD 20)
 
-add_executable(NESEmulator main.cpp datapath.cpp state.cpp basics.cpp instructions2.cpp)
+add_executable(NESEmulator main.cpp state.cpp basics.cpp instructions.cpp cpu.cpp)

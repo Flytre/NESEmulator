@@ -3,11 +3,12 @@
 
 using namespace std;
 
-class Instruction {
-    //return # of cycles
-    virtual int act(Cpu6502_State &cpu_state) {
-        return 2;
-    };
+class Instruction { ;
+public:
+//return # of cycles
+virtual int act(Cpu6502_State &cpu_state) {
+    return 2;
+}
 };
 
 using InstructionPtr = shared_ptr<Instruction>;
@@ -259,7 +260,7 @@ void instr_cpy(Cpu6502_State &cs, Val other) {
     cs.reg().set_flag(FlagPositions::NEG, result.val & 0x80);
 }
 
-int branch(Cpu6502_State &cs, function<bool(Cpu6502_State&)> cond) {
+int branch(Cpu6502_State &cs, function<bool(Cpu6502_State &)> cond) {
     int t, p;
     int8_t offset = static_cast<int8_t>(cs.get_instr_byte().val);
     if (cond(cs)) {
@@ -621,28 +622,91 @@ array<InstructionPtr, 256> instruction_ref() {
     });
 
     res[0x90] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        return branch(cs, [](auto& cs) {return !cs.reg().get_flag(FlagPositions::CARRY);});
+        return branch(cs, [](auto &cs) { return !cs.reg().get_flag(FlagPositions::CARRY); });
     });
     res[0xB0] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        return branch(cs, [](auto& cs) {return cs.reg().get_flag(FlagPositions::CARRY);});
+        return branch(cs, [](auto &cs) { return cs.reg().get_flag(FlagPositions::CARRY); });
     });
     res[0xF0] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        return branch(cs, [](auto& cs) {return cs.reg().get_flag(FlagPositions::ZERO);});
+        return branch(cs, [](auto &cs) { return cs.reg().get_flag(FlagPositions::ZERO); });
     });
     res[0x30] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        return branch(cs, [](auto& cs) {return cs.reg().get_flag(FlagPositions::NEG);});
+        return branch(cs, [](auto &cs) { return cs.reg().get_flag(FlagPositions::NEG); });
     });
     res[0xD0] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        return branch(cs, [](auto& cs) {return !cs.reg().get_flag(FlagPositions::ZERO);});
+        return branch(cs, [](auto &cs) { return !cs.reg().get_flag(FlagPositions::ZERO); });
     });
     res[0x10] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        return branch(cs, [](auto& cs) {return !cs.reg().get_flag(FlagPositions::NEG);});
+        return branch(cs, [](auto &cs) { return !cs.reg().get_flag(FlagPositions::NEG); });
     });
     res[0x50] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        return branch(cs, [](auto& cs) {return !cs.reg().get_flag(FlagPositions::OVF);});
+        return branch(cs, [](auto &cs) { return !cs.reg().get_flag(FlagPositions::OVF); });
     });
     res[0x70] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        return branch(cs, [](auto& cs) {return cs.reg().get_flag(FlagPositions::OVF);});
+        return branch(cs, [](auto &cs) { return cs.reg().get_flag(FlagPositions::OVF); });
+    });
+    res[0x18] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
+        cs.reg().set_flag(FlagPositions::CARRY, false);
+        return 2;
+    });
+    res[0xD8] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
+        cs.reg().set_flag(FlagPositions::DECIMAL, false);
+        return 2;
+    });
+    res[0x58] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
+        cs.reg().set_flag(FlagPositions::INTERRUPT_DISABLE, false);
+        return 2;
+    });
+    res[0xB8] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
+        cs.reg().set_flag(FlagPositions::OVF, false);
+        return 2;
+    });
+    res[0x38] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
+        cs.reg().set_flag(FlagPositions::CARRY, true);
+        return 2;
+    });
+    res[0xF8] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
+        cs.reg().set_flag(FlagPositions::DECIMAL, true);
+        return 2;
+    });
+    res[0x78] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
+        cs.reg().set_flag(FlagPositions::INTERRUPT_DISABLE, true);
+        return 2;
+    });
+    res[0xEA] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
+        //Fabled NOP
+        return 2;
+    });
+    //Interrupts: Last but not least
+    res[0x00] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
+        Addr return_addr = Addr(cs.reg().getPC().addr + 1);
+
+        cs.push_stack(Val(static_cast<uint8_t>(return_addr.addr >> 8)));
+        cs.push_stack(Val(static_cast<uint8_t>(return_addr.addr & 0xFF)));
+
+        cs.reg().set_flag(FlagPositions::B, true);
+        cs.push_stack(Val(cs.reg().getP()));
+        cs.reg().set_flag(FlagPositions::B, false);
+
+        cs.reg().set_flag(FlagPositions::INTERRUPT_DISABLE, true);
+
+        uint8_t low = cs.get_byte(Addr(0xFFFE)).val;
+        uint8_t high = cs.get_byte(Addr(0xFFFF)).val;
+        Addr new_pc = Addr((static_cast<uint16_t>(high) << 8) | low);
+        cs.reg().setPC(new_pc);
+
+        return 7;
+    });
+    res[0x40] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
+        cs.reg().setP(cs.pull_stack());
+        cs.reg().set_flag(FlagPositions::B, false);
+        uint8_t low = cs.pull_stack().val;
+        uint8_t high = cs.pull_stack().val;
+        Addr new_pc = Addr((static_cast<uint16_t>(high) << 8) | low);
+
+        // Set the Program Counter to the new address
+        cs.reg().setPC(new_pc);
+        return 6;
     });
 }
 
