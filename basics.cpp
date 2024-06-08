@@ -1,11 +1,15 @@
-#include "utility"
+#include <utility>
+#include <functional>
+#include <stdexcept>
+
+using namespace std;
 
 struct Addr {
     uint16_t addr;
 
     Addr() : addr(0) {}
 
-    Addr(uint16_t addr) : addr(addr) {}
+    explicit Addr(uint16_t addr) : addr(addr) {}
 
     // Overload the addition operator
     Addr operator+(const Addr &other) const {
@@ -38,7 +42,7 @@ struct Val {
 
     Val() : val(0) {}
 
-    Val(uint8_t val) : val(val) {}
+    explicit Val(uint8_t val) : val(val) {}
 
     // Overload the addition operator
     Val operator+(const Val &other) const {
@@ -146,15 +150,68 @@ struct ZeroPageAddr {
 
     ZeroPageAddr() : addr(0) {}
 
-    ZeroPageAddr(Val addr) : addr(addr.val) {}
+    explicit ZeroPageAddr(Val addr) : addr(addr.val) {}
 
     // Overload the addition operator
     ZeroPageAddr operator+(const ZeroPageAddr &other) const {
-        return ZeroPageAddr(this->addr + other.addr);
+        return ZeroPageAddr(Val(this->addr + other.addr));
     }
 
     // Overload the subtraction operator
     ZeroPageAddr operator-(const ZeroPageAddr &other) const {
-        return ZeroPageAddr(this->addr - other.addr);
+        return ZeroPageAddr(Val(this->addr - other.addr));
     }
+};
+
+class ValReference {
+private:
+    std::function<Val()> getter;
+    std::function<void(Val)> setter;
+
+public:
+    ValReference(std::function<Val()> getter, std::function<void(Val)> setter)
+            : getter(std::move(getter)), setter(std::move(setter)) {}
+
+    [[nodiscard]] Val get() const {
+        return getter();
+    }
+
+    void set(Val value) {
+        setter(value);
+    }
+};
+
+class AddrOrVal {
+private:
+    bool is_addr;
+    Addr addr;
+    Val val;
+
+public:
+    AddrOrVal(bool isAddr, const Addr &addr, const Val &val) : is_addr(isAddr), addr(addr), val(val) {}
+
+public:
+    static AddrOrVal create_addr(Addr addr) {
+        return {true, addr, Val(0)};
+    };
+
+    static AddrOrVal create_val(Val val) {
+        return {true, Addr(0), val};
+    };
+
+    static AddrOrVal create(bool is_address, Addr addr, Val val) {
+        return is_address ? create_addr(addr) : create_val(val);
+    };
+
+    Addr getAddr() {
+        if (!is_addr)
+            throw invalid_argument("Not an address");
+        return addr;
+    };
+
+    Val getVal() {
+        if (is_addr)
+            throw invalid_argument("Not a value");
+        return val;
+    };
 };

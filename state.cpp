@@ -25,15 +25,15 @@ class Cpu6502_State {
         Val X;
         Val Y;
         Addr PC;
-        Addr S; //technically 8 bits
+        Val S; //technically 8 bits
         Val P;
     public:
         Reg() {
-            P = 1 << 5;
-            S = 0xff;
+            P = Val(1 << 5);
+            S = Val(0xff);
         }
 
-        [[nodiscard]] bool flag_set(FlagPositions flag) const {
+        [[nodiscard]] bool get_flag(FlagPositions flag) const {
             return (P.val >> static_cast<int>(flag)) & 1;
         }
 
@@ -81,11 +81,11 @@ class Cpu6502_State {
         }
 
 
-        [[nodiscard]] Addr getS() const {
+        [[nodiscard]] Val getS() const {
             return S;
         }
 
-        void setS(Addr s) {
+        void setS(Val s) {
             S = s;
         }
 
@@ -100,7 +100,7 @@ class Cpu6502_State {
 
 public:
     cpu_mem mem;
-    Reg reg;
+    Reg r;
 
     void set_byte(Addr loc, Val data) {
         mem[loc.addr] = data;
@@ -113,32 +113,42 @@ public:
     [[nodiscard]] Val get_byte(ZeroPageAddr loc) {
         return mem[loc.addr];
     }
-                   
-    Reg &getReg() {
-        return reg;
+
+    Reg &reg() {
+        return r;
     }
 
     Val get_instr_byte() {
-        Val ret = mem[reg.getPC().addr];
-        reg.incrPC();
+        Val ret = mem[r.getPC().addr];
+        r.incrPC();
         return ret;
     }
 
     Val add(Val left, Val right) {
-        if (reg.flag_set(FlagPositions::DECIMAL))
+        if (r.get_flag(FlagPositions::DECIMAL))
             throw std::invalid_argument("Operation Not Supported");
-        Val carry = reg.flag_set(FlagPositions::CARRY) ? 1 : 0;
+        Val carry = Val(r.get_flag(FlagPositions::CARRY) ? 1 : 0);
         Val res = left + right + carry;
         uint16_t ovf = (uint16_t) left.val + (uint16_t) right.val + carry.val;
-        reg.set_flag(FlagPositions::CARRY, ovf > 0xFF);
-        reg.set_flag(FlagPositions::ZERO, res == 0);
-        reg.set_flag(FlagPositions::NEG, res.val & 0x80);
-        reg.set_flag(FlagPositions::OVF, ((left ^ res) & (right ^ res) & 0x80) != 0);
+        r.set_flag(FlagPositions::CARRY, ovf > 0xFF);
+        r.set_flag(FlagPositions::ZERO, res.val == 0);
+        r.set_flag(FlagPositions::NEG, res.val & 0x80);
+        r.set_flag(FlagPositions::OVF, ((left ^ res) & (right ^ res) & Val(0x80)) != Val(0));
         return res;
+    }
+
+    void push_stack(Val val) {
+        mem[r.getS().val] = val;
+        r.setS(r.getS() - Val(1));
+    }
+
+    Val pull_stack() {
+        r.setS(r.getS() + Val(1));
+        return mem[r.getS().val];
     }
 
     Cpu6502_State() {
         mem = cpu_mem();
-        reg = Reg();
+        r = Reg();
     }
 };
