@@ -6,6 +6,7 @@
 using namespace std;
 using cpu_mem = array<uint8_t, 1 << 16>;
 
+//TODO: DECIMAL MODE
 enum class FlagPositions {
     CARRY = 0,
     ZERO = 1,
@@ -100,12 +101,35 @@ public:
     cpu_mem mem;
     Reg reg;
 
-    const cpu_mem &getMem() {
-        return mem;
+    void set_byte(uint16_t loc, uint8_t data) {
+        mem[loc] = data;
+    }
+
+    [[nodiscard]] uint8_t get_byte(uint16_t loc) {
+        return mem[loc];
     }
 
     Reg &getReg() {
         return reg;
+    }
+
+    uint8_t get_instr_byte() {
+        uint8_t ret = mem[reg.getPC()];
+        reg.incrPC();
+        return ret;
+    }
+
+    uint8_t add(uint8_t left, uint8_t right) {
+        if (reg.flag_set(FlagPositions::DECIMAL))
+            throw std::invalid_argument("Operation Not Supported");
+        uint8_t carry = reg.flag_set(FlagPositions::CARRY) ? 1 : 0;
+        uint8_t res = left + right + carry;
+        uint16_t ovf = (uint16_t) left + (uint16_t) right + carry;
+        reg.set_flag(FlagPositions::CARRY, ovf > 0xFF);
+        reg.set_flag(FlagPositions::ZERO, res == 0);
+        reg.set_flag(FlagPositions::NEG, res & 0x80);
+        reg.set_flag(FlagPositions::OVF, ((left ^ res) & (right ^ res) & 0x80) != 0);
+        return res;
     }
 
     Cpu6502_State() {
