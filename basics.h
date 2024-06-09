@@ -1,8 +1,9 @@
+#ifndef NESEMULATOR_BASICS_H
+#define NESEMULATOR_BASICS_H
+
 #include <utility>
 #include <functional>
 #include <stdexcept>
-
-using namespace std;
 
 struct Addr {
     uint16_t addr;
@@ -205,13 +206,15 @@ public:
 
     Addr getAddr() {
         if (!is_addr)
-            throw invalid_argument("Not an address");
+            throw std::invalid_argument("Not an address");
         return addr;
     };
 
     Val getVal() {
         if (is_addr)
-            throw invalid_argument("Not a value");
+            throw std::invalid_argument("Not a value");
         return val;
     };
 };
+
+#endif //NESEMULATOR_BASICS_H

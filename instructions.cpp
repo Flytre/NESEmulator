@@ -1,23 +1,26 @@
-#include "state.cpp"
+#pragma once
+
+#include <utility>
+
+#include "state.h"
 #include "functional"
+#include "basics.h"
+#include "instructions.h"
 
 using namespace std;
 
-class Instruction { ;
-public:
-//return # of cycles
-virtual int act(Cpu6502_State &cpu_state) {
+
+int Instruction::act(Cpu6502_State &cpu_state) {
     return 2;
 }
-};
 
 using InstructionPtr = shared_ptr<Instruction>;
 
 
 class FunctionInstruction : public Instruction {
 public:
-    FunctionInstruction(function<int(Cpu6502_State &)> func)
-            : func_(func) {}
+    explicit FunctionInstruction(function<int(Cpu6502_State &)> func)
+            : func_(std::move(func)) {}
 
     int act(Cpu6502_State &cpu_state) override {
         return func_(cpu_state);
@@ -85,7 +88,7 @@ AddrOrVal x_indexed_zero_page_indirect(Cpu6502_State &cs, bool return_address) {
 
 
 pair<AddrOrVal, bool> zero_page_indirect_y_indexed(Cpu6502_State &cs, bool return_address) {
-    ZeroPageAddr addr_addr = ZeroPageAddr(cs.get_instr_byte());
+    auto addr_addr = ZeroPageAddr(cs.get_instr_byte());
     Addr indir_addr = indirect_addr(cs, addr_addr);
     return y_indexed(cs, indir_addr, return_address);
 }
@@ -158,7 +161,7 @@ void instr_sbc(Cpu6502_State &cs, AddrOrVal arg) {
 
 void instr_asl(Cpu6502_State &cs, ValReference ref) {
     Val current = ref.get();
-    cs.reg().set_flag(FlagPositions::CARRY, current.val && 0x80);
+    cs.reg().set_flag(FlagPositions::CARRY, current.val & 0x80);
     Val result = current << 1;
     cs.reg().set_flag(FlagPositions::ZERO, result.val == 0);
     cs.reg().set_flag(FlagPositions::NEG, result.val & 0x80);
@@ -260,8 +263,7 @@ void instr_cpy(Cpu6502_State &cs, Val other) {
     cs.reg().set_flag(FlagPositions::NEG, result.val & 0x80);
 }
 
-int branch(Cpu6502_State &cs, function<bool(Cpu6502_State &)> cond) {
-    int t, p;
+int branch(Cpu6502_State &cs, const function<bool(Cpu6502_State &)> &cond) {
     int8_t offset = static_cast<int8_t>(cs.get_instr_byte().val);
     if (cond(cs)) {
         uint16_t new_pc_addr = static_cast<uint16_t>(cs.reg().getPC().addr + offset);
@@ -274,17 +276,17 @@ int branch(Cpu6502_State &cs, function<bool(Cpu6502_State &)> cond) {
 
 
 ValReference acc_ref(Cpu6502_State &cs) {
-    return ValReference(
+    return {
             [&cs]() { return cs.reg().getA(); },
             [&cs](Val x) { return cs.reg().setA(x); }
-    );
+    };
 }
 
 ValReference mem_ref(Cpu6502_State &cs, Addr loc) {
-    return ValReference(
+    return {
             [&cs, loc]() { return cs.get_byte(loc); },
             [&cs, loc](Val x) { return cs.set_byte(loc, x); }
-    );
+    };
 }
 
 void create_acc_suite(array<InstructionPtr, 256> res, int base_addr,
@@ -313,7 +315,7 @@ void create_acc_suite(array<InstructionPtr, 256> res, int base_addr,
         return 4 + p;
     });
     res[base_addr + 0x05] = make_shared<FunctionInstruction>([&func, sta](Cpu6502_State &cs) {
-        ZeroPageAddr addr = ZeroPageAddr(cs.get_instr_byte());
+        auto addr = ZeroPageAddr(cs.get_instr_byte());
         func(cs, AddrOrVal::create(sta, Addr(addr.addr), cs.get_byte(addr)));
         return 3;
     });
@@ -336,10 +338,11 @@ void create_acc_suite(array<InstructionPtr, 256> res, int base_addr,
 
 void create_shift_suite(array<InstructionPtr, 256> res, int base_addr,
                         const function<void(Cpu6502_State &cs, ValReference ref)> &func, bool include_acc) {
-    res[base_addr + 0x0A] = make_shared<FunctionInstruction>([&func](Cpu6502_State &cs) {
-        func(cs, acc_ref(cs));
-        return 2;
-    });
+    if (include_acc)
+        res[base_addr + 0x0A] = make_shared<FunctionInstruction>([&func](Cpu6502_State &cs) {
+            func(cs, acc_ref(cs));
+            return 2;
+        });
     res[base_addr + 0x0E] = make_shared<FunctionInstruction>([&func](Cpu6502_State &cs) {
         func(cs, mem_ref(cs, get_2b_addr(cs)));
         return 6;
@@ -350,7 +353,7 @@ void create_shift_suite(array<InstructionPtr, 256> res, int base_addr,
         return 7;
     });
     res[base_addr + 0x06] = make_shared<FunctionInstruction>([&func](Cpu6502_State &cs) {
-        ZeroPageAddr addr = ZeroPageAddr(cs.get_instr_byte());
+        auto addr = ZeroPageAddr(cs.get_instr_byte());
         func(cs, mem_ref(cs, Addr(addr.addr)));
         return 5;
     });
@@ -708,6 +711,7 @@ array<InstructionPtr, 256> instruction_ref() {
         cs.reg().setPC(new_pc);
         return 6;
     });
+    return res;
 }
 
 const array<InstructionPtr, 256> instructions = instruction_ref();
