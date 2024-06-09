@@ -72,40 +72,38 @@ void Reg::setP(Val p) {
 
 
 void Memory::write_byte(uint16_t address, uint8_t value) {
-    if (address < 0x2000) {
-        ram[address % RAM_SIZE] = value;
-        written[address % RAM_SIZE] = true;
-    } else if (address < 0x4000) {
-        ppu_registers[(address - 0x2000) % PPU_REGISTERS_SIZE] = value;
-    } else if (address < 0x4020) {
-        apu_io_registers[address - 0x4000] = value;
-    } else if (address >= 0xFFFA && address <= 0xFFFF) {
-        interrupt_vec[address - 0xFFFA] = value;
-    } else if (address >= 0x8000) {
-        prg_rom[address - 0x8000] = value;
-    } else {
-        std::cerr << "Unhandled memory write at address: " << std::hex << address << " value: " << std::hex
-                  << (int) value << "\n";
-    }
+//    if (address < 0x2000) {
+//        ram[address % RAM_SIZE] = value;
+//        written[address % RAM_SIZE] = true;
+//    } else if (address < 0x4000) {
+//        ppu_registers[(address - 0x2000) % PPU_REGISTERS_SIZE] = value;
+//    } else if (address < 0x4020) {
+//        apu_io_registers[address - 0x4000] = value;
+//    } else if (address >= 0xFFFA && address <= 0xFFFF) {
+//        interrupt_vec[address - 0xFFFA] = value;
+//    } else if (address >= 0x8000) {
+//        prg_rom[address - 0x8000] = value;
+//    } else {
+    misc_mem[address] = value;
+    //}
 }
 
 uint8_t Memory::read_byte(uint16_t address) {
-    if (address < 0x2000) {
-        if (!written[address % RAM_SIZE])
-            throw invalid_argument("Ram not initialized at address " + to_string(address));
-        return ram[address % RAM_SIZE];
-    } else if (address < 0x4000) {
-        return ppu_registers[(address - 0x2000) % PPU_REGISTERS_SIZE];
-    } else if (address < 0x4020) {
-        return apu_io_registers[address - 0x4000];
-    } else if (address >= 0xFFFA && address <= 0xFFFF) {
-        return interrupt_vec[address - 0xFFFA];
-    } else if (address >= 0x8000) {
-        return prg_rom[address - 0x8000];
-    } else {
-        std::cerr << "Unhandled memory read at address: " << std::hex << address << "\n";
-        return 0;
-    }
+//    if (address < 0x2000) {
+//        if (!written[address % RAM_SIZE])
+//            throw invalid_argument("Ram not initialized at address " + to_string(address));
+//        return ram[address % RAM_SIZE];
+//    } else if (address < 0x4000) {
+//        return ppu_registers[(address - 0x2000) % PPU_REGISTERS_SIZE];
+//    } else if (address < 0x4020) {
+//        return apu_io_registers[address - 0x4000];
+//    } else if (address >= 0xFFFA && address <= 0xFFFF) {
+//        return interrupt_vec[address - 0xFFFA];
+//    } else if (address >= 0x8000) {
+//        return prg_rom[address - 0x8000];
+//    } else {
+    return misc_mem[address];
+    //}
 }
 
 void Memory::loadCartridge(const std::vector<uint8_t> &romData) {
@@ -143,8 +141,6 @@ Val Cpu6502_State::get_instr_byte() {
 }
 
 Val Cpu6502_State::add(Val left, Val right) {
-    if (r.get_flag(FlagPositions::DECIMAL))
-        throw std::invalid_argument("Operation Not Supported");
     Val carry = Val(r.get_flag(FlagPositions::CARRY) ? 1 : 0);
     Val res = left + right + carry;
     uint16_t ovf = (uint16_t) left.val + (uint16_t) right.val + carry.val;
@@ -156,13 +152,15 @@ Val Cpu6502_State::add(Val left, Val right) {
 }
 
 void Cpu6502_State::push_stack(Val val) {
-    m.write_byte(r.getS().val, val.val);
+    uint16_t stack_addr = 0x0100 + (r.getS().val % 0x100);
+    m.write_byte(stack_addr, val.val);
     r.setS(r.getS() - Val(1));
 }
 
 Val Cpu6502_State::pull_stack() {
     r.setS(r.getS() + Val(1));
-    return Val(m.read_byte(r.getS().val));
+    uint16_t stack_addr = 0x0100 + (r.getS().val % 0x100);
+    return Val(m.read_byte(stack_addr));
 }
 
 Cpu6502_State::Cpu6502_State() {

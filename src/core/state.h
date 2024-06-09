@@ -16,6 +16,7 @@ enum class FlagPositions {
     INTERRUPT_DISABLE = 2,
     DECIMAL = 3,
     B = 4,
+    UNUSED = 5,
     OVF = 6,
     NEG = 7
 };
@@ -80,6 +81,8 @@ private:
     std::array<uint8_t, APU_IO_REGISTERS_SIZE> apu_io_registers = {};
     std::array<uint8_t, PRG_ROM_SIZE> prg_rom = {};
     std::array<uint8_t, 6> interrupt_vec = {};
+    std::array<uint8_t, 0x10000> misc_mem = {};
+
 };
 
 

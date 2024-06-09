@@ -147,9 +147,10 @@ void instr_sbc(Cpu6502_State &cs, AddrOrVal arg) {
     Val A = cs.reg().getA();
     Val borrow = cs.reg().get_flag(FlagPositions::CARRY) ? Val(0) : Val(1);
     Val result = A - val - borrow;
+    int temp_result = static_cast<int>(A.val) - static_cast<int>(val.val) - static_cast<int>(borrow.val);
 
     bool overflow = ((A.val ^ result.val) & 0x80) && ((A.val ^ val.val) & 0x80);
-    bool carry = A >= val + borrow;
+    bool carry = temp_result >= 0;
 
     cs.reg().set_flag(FlagPositions::CARRY, carry);
     cs.reg().set_flag(FlagPositions::ZERO, result.val == 0);
@@ -289,46 +290,46 @@ ValReference mem_ref(Cpu6502_State &cs, Addr loc) {
     };
 }
 
-void create_acc_suite(array<InstructionPtr, 256> res, int base_addr,
-                      const function<void(Cpu6502_State &, AddrOrVal arg)> &func, bool sta) {
+void create_acc_suite(array<InstructionPtr, 256> &res, int base_addr,
+                      const function<void(Cpu6502_State &, AddrOrVal arg)> func, bool sta) {
     if (!sta)
-        res[base_addr + 0x09] = make_shared<FunctionInstruction>([&func](Cpu6502_State &cs) {
+        res[base_addr + 0x09] = make_shared<FunctionInstruction>([func](Cpu6502_State &cs) {
             Val imm = cs.get_instr_byte();
             func(cs, AddrOrVal::create_val(imm));
             return 2;
         });
-    res[base_addr + 0x0D] = make_shared<FunctionInstruction>([&func, sta](Cpu6502_State &cs) {
+    res[base_addr + 0x0D] = make_shared<FunctionInstruction>([func, sta](Cpu6502_State &cs) {
         Addr addr = get_2b_addr(cs);
         func(cs, AddrOrVal::create(sta, addr, cs.get_byte(addr)));
         return 4;
     });
-    res[base_addr + 0x1D] = make_shared<FunctionInstruction>([&func, sta](Cpu6502_State &cs) {
+    res[base_addr + 0x1D] = make_shared<FunctionInstruction>([func, sta](Cpu6502_State &cs) {
         auto [val, p] = x_indexed(cs, get_2b_addr(cs), sta);
         func(cs, val);
         if (sta) p = true;
         return 4 + p;
     });
-    res[base_addr + 0x19] = make_shared<FunctionInstruction>([&func, sta](Cpu6502_State &cs) {
+    res[base_addr + 0x19] = make_shared<FunctionInstruction>([func, sta](Cpu6502_State &cs) {
         auto [val, p] = y_indexed(cs, get_2b_addr(cs), sta);
         func(cs, val);
         if (sta) p = true;
         return 4 + p;
     });
-    res[base_addr + 0x05] = make_shared<FunctionInstruction>([&func, sta](Cpu6502_State &cs) {
+    res[base_addr + 0x05] = make_shared<FunctionInstruction>([func, sta](Cpu6502_State &cs) {
         auto addr = ZeroPageAddr(cs.get_instr_byte());
         func(cs, AddrOrVal::create(sta, Addr(addr.addr), cs.get_byte(addr)));
         return 3;
     });
-    res[base_addr + 0x15] = make_shared<FunctionInstruction>([&func, sta](Cpu6502_State &cs) {
+    res[base_addr + 0x15] = make_shared<FunctionInstruction>([func, sta](Cpu6502_State &cs) {
         auto [val, p] = x_indexed_zero_page(cs, ZeroPageAddr(cs.get_instr_byte()), sta);
         func(cs, val);
         return 4;
     });
-    res[base_addr + 0x01] = make_shared<FunctionInstruction>([&func, sta](Cpu6502_State &cs) {
+    res[base_addr + 0x01] = make_shared<FunctionInstruction>([func, sta](Cpu6502_State &cs) {
         func(cs, x_indexed_zero_page_indirect(cs, sta));
         return 6;
     });
-    res[0x11] = make_shared<FunctionInstruction>([&func, sta](Cpu6502_State &cs) {
+    res[base_addr + 0x11] = make_shared<FunctionInstruction>([func, sta](Cpu6502_State &cs) {
         auto [val, p] = zero_page_indirect_y_indexed(cs, sta);
         func(cs, val);
         if (sta) p = true;
@@ -336,28 +337,28 @@ void create_acc_suite(array<InstructionPtr, 256> res, int base_addr,
     });
 }
 
-void create_shift_suite(array<InstructionPtr, 256> res, int base_addr,
-                        const function<void(Cpu6502_State &cs, ValReference ref)> &func, bool include_acc) {
+void create_shift_suite(array<InstructionPtr, 256> &res, int base_addr,
+                        const function<void(Cpu6502_State &cs, ValReference ref)> func, bool include_acc) {
     if (include_acc)
-        res[base_addr + 0x0A] = make_shared<FunctionInstruction>([&func](Cpu6502_State &cs) {
+        res[base_addr + 0x0A] = make_shared<FunctionInstruction>([func](Cpu6502_State &cs) {
             func(cs, acc_ref(cs));
             return 2;
         });
-    res[base_addr + 0x0E] = make_shared<FunctionInstruction>([&func](Cpu6502_State &cs) {
+    res[base_addr + 0x0E] = make_shared<FunctionInstruction>([func](Cpu6502_State &cs) {
         func(cs, mem_ref(cs, get_2b_addr(cs)));
         return 6;
     });
-    res[base_addr + 0x1E] = make_shared<FunctionInstruction>([&func](Cpu6502_State &cs) {
+    res[base_addr + 0x1E] = make_shared<FunctionInstruction>([func](Cpu6502_State &cs) {
         auto [addr, p] = x_indexed(cs, get_2b_addr(cs), true);
         func(cs, mem_ref(cs, addr.getAddr()));
         return 7;
     });
-    res[base_addr + 0x06] = make_shared<FunctionInstruction>([&func](Cpu6502_State &cs) {
+    res[base_addr + 0x06] = make_shared<FunctionInstruction>([func](Cpu6502_State &cs) {
         auto addr = ZeroPageAddr(cs.get_instr_byte());
         func(cs, mem_ref(cs, Addr(addr.addr)));
         return 5;
     });
-    res[base_addr + 0x16] = make_shared<FunctionInstruction>([&func](Cpu6502_State &cs) {
+    res[base_addr + 0x16] = make_shared<FunctionInstruction>([func](Cpu6502_State &cs) {
         auto [addr, p] = x_indexed_zero_page(cs, ZeroPageAddr(cs.get_instr_byte()), true);
         func(cs, mem_ref(cs, addr.getAddr()));
         return 6;
@@ -369,20 +370,20 @@ array<InstructionPtr, 256> instruction_ref() {
     array<InstructionPtr, 256> res{};
 
     create_acc_suite(res, 0x00, instr_ora, false);
-    create_acc_suite(res, 0x20, instr_adc, false);
+    create_acc_suite(res, 0x20, instr_and, false);
     create_acc_suite(res, 0x40, instr_eor, false);
-    create_acc_suite(res, 0x60, instr_and, false);
+    create_acc_suite(res, 0x60, instr_adc, false);
     create_acc_suite(res, 0x80, instr_sta, true);
     create_acc_suite(res, 0xA0, instr_lda, false);
     create_acc_suite(res, 0xC0, instr_cmp, false);
     create_acc_suite(res, 0xE0, instr_sbc, false);
 
     create_shift_suite(res, 0x00, instr_asl, true);
-    create_shift_suite(res, 0x00, instr_lsr, true);
-    create_shift_suite(res, 0x00, instr_rol, true);
-    create_shift_suite(res, 0x00, instr_ror, true);
-    create_shift_suite(res, 0x00, instr_dec, false);
-    create_shift_suite(res, 0x00, instr_inc, false);
+    create_shift_suite(res, 0x40, instr_lsr, true);
+    create_shift_suite(res, 0x20, instr_rol, true);
+    create_shift_suite(res, 0x60, instr_ror, true);
+    create_shift_suite(res, 0xC0, instr_dec, false);
+    create_shift_suite(res, 0xE0, instr_inc, false);
 
     res[0xA2] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
         instr_ldx(cs, cs.get_instr_byte());
@@ -398,7 +399,7 @@ array<InstructionPtr, 256> instruction_ref() {
         return 4 + p;
     });
     res[0xA6] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        instr_ldx(cs, cs.get_instr_byte());
+        instr_ldx(cs, cs.get_byte(Addr(cs.get_instr_byte().val)));
         return 3;
     });
     res[0xB6] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
@@ -416,16 +417,16 @@ array<InstructionPtr, 256> instruction_ref() {
         return 4;
     });
     res[0xBC] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        auto [val, p] = y_indexed(cs, get_2b_addr(cs), false);
+        auto [val, p] = x_indexed(cs, get_2b_addr(cs), false);
         instr_ldy(cs, val.getVal());
         return 4 + p;
     });
     res[0xA4] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        instr_ldy(cs, cs.get_instr_byte());
+        instr_ldy(cs, cs.get_byte(Addr(cs.get_instr_byte().val)));
         return 3;
     });
     res[0xB4] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        auto [val, p] = y_indexed_zero_page(cs, ZeroPageAddr(cs.get_instr_byte()), false);
+        auto [val, p] = x_indexed_zero_page(cs, ZeroPageAddr(cs.get_instr_byte()), false);
         instr_ldy(cs, val.getVal());
         return 4;
     });
@@ -457,7 +458,7 @@ array<InstructionPtr, 256> instruction_ref() {
     });
 
     res[0x94] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        auto aov = y_indexed_zero_page(cs, ZeroPageAddr(cs.get_instr_byte()), true);
+        auto aov = x_indexed_zero_page(cs, ZeroPageAddr(cs.get_instr_byte()), true);
         instr_sty(cs, aov.first.getAddr());
         return 4;
     });
@@ -492,8 +493,6 @@ array<InstructionPtr, 256> instruction_ref() {
 
     res[0x9A] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
         cs.reg().setS(cs.reg().getX());
-        cs.reg().set_flag(FlagPositions::NEG, cs.reg().getX().val & 0x80);
-        cs.reg().set_flag(FlagPositions::ZERO, cs.reg().getX().val == 0);
         return 2;
     });
 
@@ -505,26 +504,26 @@ array<InstructionPtr, 256> instruction_ref() {
     });
 
     res[0x48] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        cs.set_byte(Addr(cs.reg().getS().val), cs.reg().getA());
-        cs.reg().setS(cs.reg().getS() - Val(1));
+        cs.push_stack(cs.reg().getA());
         return 3;
     });
 
     res[0x08] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        cs.set_byte(Addr(cs.reg().getS().val), cs.reg().getP());
-        cs.reg().setS(cs.reg().getS() - Val(1));
+        cs.push_stack(Val(cs.reg().getP().val | 0x30));
         return 3;
     });
 
     res[0x68] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        cs.reg().setS(cs.reg().getS() + Val(1));
-        cs.reg().setA(cs.get_byte(Addr(cs.reg().getS().val)));
+        cs.reg().setA(cs.pull_stack());
+        cs.reg().set_flag(FlagPositions::NEG, cs.reg().getA().val & 0x80);
+        cs.reg().set_flag(FlagPositions::ZERO, cs.reg().getA().val == 0);
         return 4;
     });
 
     res[0x28] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
-        cs.reg().setS(cs.reg().getS() + Val(1));
-        cs.reg().setP(cs.get_byte(Addr(cs.reg().getS().val)));
+        cs.reg().setP(cs.pull_stack());
+        cs.reg().set_flag(FlagPositions::UNUSED, true);
+        cs.reg().set_flag(FlagPositions::B, false);
         return 4;
     });
     res[0x2C] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
@@ -610,8 +609,9 @@ array<InstructionPtr, 256> instruction_ref() {
 
     res[0x20] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
         Addr new_pc = get_2b_addr(cs);
-        cs.push_stack(Val(static_cast<uint8_t>(cs.reg().getPC().addr >> 8)));
-        cs.push_stack(Val(static_cast<uint8_t>(cs.reg().getPC().addr & 0xFF)));
+        auto ret_addr = cs.reg().getPC().addr - 1;
+        cs.push_stack(Val(static_cast<uint8_t>(ret_addr >> 8)));
+        cs.push_stack(Val(static_cast<uint8_t>(ret_addr & 0xFF)));
         cs.reg().setPC(new_pc);
         return 6;
     });
@@ -621,6 +621,7 @@ array<InstructionPtr, 256> instruction_ref() {
         Val high = cs.pull_stack();
         Addr PC = Addr((static_cast<uint16_t>(high.val) << 8) | static_cast<uint16_t>(low.val));
         cs.reg().setPC(PC);
+        cs.reg().incrPC();
         return 6;
     });
 
@@ -702,6 +703,7 @@ array<InstructionPtr, 256> instruction_ref() {
     });
     res[0x40] = make_shared<FunctionInstruction>([](Cpu6502_State &cs) {
         cs.reg().setP(cs.pull_stack());
+        cs.reg().set_flag(FlagPositions::UNUSED, true);
         cs.reg().set_flag(FlagPositions::B, false);
         uint8_t low = cs.pull_stack().val;
         uint8_t high = cs.pull_stack().val;

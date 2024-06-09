@@ -197,7 +197,7 @@ public:
     };
 
     static AddrOrVal create_val(Val val) {
-        return {true, Addr(0), val};
+        return {false, Addr(0), val};
     };
 
     static AddrOrVal create(bool is_address, Addr addr, Val val) {

@@ -1,4 +1,5 @@
 #pragma once
+
 #include "state.h"
 #include "instructions.h"
 #include <vector>
@@ -17,10 +18,23 @@ public:
         state.reg().setA(Val(0));
         state.reg().setX(Val(0));
         state.reg().setY(Val(0));
-        state.reg().setPC(Addr(0xFFF3));
         state.reg().setS(Val(0xFD));
         state.reg().setP(Val(4));
         state.mem().power();
+        uint8_t low = state.mem().read_byte(0xFFFC);
+        uint8_t high = state.mem().read_byte(0xFFFD);
+        Addr addr = Addr((static_cast<uint16_t>(high) << 8) | static_cast<uint16_t>(low));
+        state.reg().setPC(addr);
+
+    }
+
+    void reset() {
+        state.reg().set_flag(FlagPositions::INTERRUPT_DISABLE, true);
+        state.reg().setS(state.reg().getS() - Val(3));
+        uint8_t low = state.mem().read_byte(0xFFFC);
+        uint8_t high = state.mem().read_byte(0xFFFD);
+        Addr addr = Addr((static_cast<uint16_t>(high) << 8) | static_cast<uint16_t>(low));
+        state.reg().setPC(addr);
     }
 
     void posedge_clock() {
@@ -53,14 +67,24 @@ public:
                 state.mem().write_byte(0x8000 + i, rom_data[prg_rom_start + i]);
                 state.mem().write_byte(0xC000 + i, rom_data[prg_rom_start + i]);
             }
-        } else if (prg_rom_size == 0x8000) {
+        } else {
             for (int i = 0; i < prg_rom_end - prg_rom_start; i++) {
                 state.mem().write_byte(0x8000 + i, rom_data[prg_rom_start + i]);
             }
-        } else {
-            throw std::runtime_error("Unsupported PRG ROM size");
         }
 
         std::cout << "ROM loaded successfully" << std::endl;
+    }
+
+    Reg &reg() {
+        return state.reg();
+    }
+
+    Memory &mem() {
+        return state.mem();
+    }
+
+    Cpu6502_State& cpu_state() {
+        return state;
     }
 };
